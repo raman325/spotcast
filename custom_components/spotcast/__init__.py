@@ -1,17 +1,23 @@
 import asyncio
+from datetime import datetime
+from functools import wraps, partial
 import logging
-import voluptuous as vol
 import random
 import time
-from datetime import datetime
+
+from pychromecast import Chromecast
+
 import spotipy
-from functools import wraps, partial
-from homeassistant.components import http, websocket_api
+import voluptuous as vol
+
+from homeassistant.components import websocket_api
+from homeassistant.components.cast.helpers import ChromeCastZeroconf
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 import homeassistant.helpers.config_validation as cv
-from homeassistant.components.cast.media_player import KNOWN_CHROMECAST_INFO_KEY
-from homeassistant.components.cast.helpers import ChromeCastZeroconf
+from homeassistant.helpers.entity_registry import async_get
+
+from .helpers import get_spotcast_chromecasts
 
 __VERSION__ = "3.4.7"
 DOMAIN = "spotcast"
@@ -212,16 +218,15 @@ def setup(hass, config):
     def websocket_handle_castdevices(hass, connection, msg):
         """Handle to get cast devices for debug purposes"""
         _LOGGER.debug("websocket_handle_castdevices msg: %s", msg)
-        known_devices = hass.data.get(KNOWN_CHROMECAST_INFO_KEY, [])
         resp = [
             {
-                "host": str(known_devices[k].host),
-                "port": known_devices[k].port,
-                "uuid": known_devices[k].uuid,
-                "model_name": known_devices[k].model_name,
-                "friendly_name": known_devices[k].friendly_name,
+                "host": k.socket_client.host,
+                "port": k.socket_client.port,
+                "uuid": str(k.uuid),
+                "model_name": k.model_name,
+                "friendly_name": k.device.friendly_name,
             }
-            for k in known_devices
+            for k in get_spotcast_chromecasts(async_get(hass))
         ]
 
         connection.send_message(websocket_api.result_message(msg["id"], resp))
@@ -406,43 +411,23 @@ class SpotifyCastDevice:
             raise HomeAssistantError("device_name is empty")
 
         # Find chromecast device
-        self.castDevice = self.getChromecastDevice(device_name)
+        self.castDevice: Chromecast = self.getChromecastDevice(device_name)
         _LOGGER.debug("Found cast device: %s", self.castDevice)
         self.castDevice.wait()
 
     def getChromecastDevice(self, device_name):
         import pychromecast
 
-        # Get cast from discovered devices of cast platform
-        known_devices = self.hass.data.get(KNOWN_CHROMECAST_INFO_KEY, [])
+        devices, browser = pychromecast.get_listed_chromecasts(
+            friendly_names=[device_name],
+            zeroconf_instance=ChromeCastZeroconf.get_zeroconf(),
+        )
+        browser.stop_discovery()
 
-        _LOGGER.debug("Chromecast devices: %s", known_devices)
-        try:
-            # HA below 0.113
-            cast_info = next((x for x in known_devices if x.friendly_name == device_name), None)
-        except:
-            cast_info = next(
-                (
-                    known_devices[x]
-                    for x in known_devices
-                    if known_devices[x].friendly_name == device_name
-                ),
-                None,
-            )
+        _LOGGER.debug("devices: %s", devices)
 
-        _LOGGER.debug("cast info: %s", cast_info)
-
-        if cast_info:
-            return pychromecast.get_chromecast_from_service(
-                  (
-                     cast_info.services,
-                     cast_info.uuid,
-                     cast_info.model_name,
-                     cast_info.friendly_name,
-                     None,
-                     None,
-                 ),
-                 ChromeCastZeroconf.get_zeroconf())
+        if devices:
+            return devices[0]
         _LOGGER.error(
             "Could not find device %s from hass.data",
             device_name,

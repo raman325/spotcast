@@ -1,11 +1,13 @@
-import logging
-import json
 from datetime import timedelta
+import json
+import logging
+
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_registry import async_get
 from homeassistant.util import dt
 from homeassistant.const import STATE_OK, STATE_UNKNOWN
 
-from . import DOMAIN, KNOWN_CHROMECAST_INFO_KEY
+from .helpers import get_spotcast_chromecasts
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -14,7 +16,10 @@ SCAN_INTERVAL = timedelta(seconds=SENSOR_SCAN_INTERVAL_SECS)
 
 
 def setup_platform(hass, config, add_devices, discovery_info=None):
-    add_devices([ChromecastDevicesSensor(hass)])
+    _LOGGER.error("test")
+    entity = ChromecastDevicesSensor(hass)
+    add_devices([entity])
+    _LOGGER.error(entity.unique_id)
 
 class ChromecastDevicesSensor(Entity):
 
@@ -27,7 +32,11 @@ class ChromecastDevicesSensor(Entity):
             'devices': [],
             'last_update': None
         }
+        self.ent_reg = None
         _LOGGER.debug('initiating sensor')
+
+    async def async_added_to_hass(self) -> None:
+        self.ent_reg = async_get(self.hass)
 
     @property
     def name(self):
@@ -45,18 +54,18 @@ class ChromecastDevicesSensor(Entity):
     def update(self):
         _LOGGER.debug('Getting chromecast devices')
 
-        known_devices = self.hass.data.get(KNOWN_CHROMECAST_INFO_KEY, [])
+        known_devices = get_spotcast_chromecasts(self.ent_reg)
 
         _LOGGER.debug('devices %s', known_devices)
 
         chromecasts = [
             {
-                "host": str(known_devices[k].host),
-                "port": known_devices[k].port,
-                "uuid": known_devices[k].uuid,
-                "model_name": known_devices[k].model_name,
-                "name": known_devices[k].friendly_name,
-                'manufacturer': known_devices[k].manufacturer
+                "host": str(k.socket_client.host),
+                "port": k.socket_client.port,
+                "uuid": str(k.uuid),
+                "model_name": k.model_name,
+                "name": k.device.friendly_name,
+                'manufacturer': k.device.manufacturer
             }
             for k in known_devices
         ]
