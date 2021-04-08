@@ -15,7 +15,9 @@ from homeassistant.helpers.entity_registry import EntityRegistry
 _LOGGER = logging.getLogger(__name__)
 
 
-def get_spotcast_chromecasts(hass: HomeAssistant, ent_reg: EntityRegistry) -> List[pychromecast.Chromecast]:
+def get_spotcast_chromecasts(
+    hass: HomeAssistant, ent_reg: EntityRegistry
+) -> List[pychromecast.Chromecast]:
     """Get Chromecasts from entity registry."""
     uuids = [
         UUID(entity.unique_id)
@@ -25,9 +27,10 @@ def get_spotcast_chromecasts(hass: HomeAssistant, ent_reg: EntityRegistry) -> Li
     _LOGGER.debug("UUIDs found: %s", uuids)
 
     devices, browser = pychromecast.get_listed_chromecasts(
-        uuids=uuids, zeroconf_instance=asyncio.run_coroutine_threadsafe(
+        uuids=uuids,
+        zeroconf_instance=asyncio.run_coroutine_threadsafe(
             async_get_instance(hass), hass.loop
-        ).result()
+        ).result(),
     )
     browser.stop_discovery()
     _LOGGER.debug("Devices found: %s", devices)
