@@ -11,7 +11,7 @@ import spotipy
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
-from homeassistant.components.cast.helpers import ChromeCastZeroconf
+from homeassistant.components.zeroconf import async_get_instance
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 import homeassistant.helpers.config_validation as cv
@@ -226,7 +226,7 @@ def setup(hass, config):
                 "model_name": k.model_name,
                 "friendly_name": k.device.friendly_name,
             }
-            for k in get_spotcast_chromecasts(async_get(hass))
+            for k in get_spotcast_chromecasts(hass, async_get(hass))
         ]
 
         connection.send_message(websocket_api.result_message(msg["id"], resp))
@@ -420,7 +420,9 @@ class SpotifyCastDevice:
 
         devices, browser = pychromecast.get_listed_chromecasts(
             friendly_names=[device_name],
-            zeroconf_instance=ChromeCastZeroconf.get_zeroconf(),
+            zeroconf_instance=asyncio.run_coroutine_threadsafe(
+                async_get_instance(self.hass), self.hass.loop
+            ).result(),
         )
         browser.stop_discovery()
 

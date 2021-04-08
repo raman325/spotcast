@@ -54,7 +54,7 @@ class ChromecastDevicesSensor(Entity):
     def update(self):
         _LOGGER.debug('Getting chromecast devices')
 
-        known_devices = get_spotcast_chromecasts(self.ent_reg)
+        known_devices = get_spotcast_chromecasts(self.hass, self.ent_reg)
 
         _LOGGER.debug('devices %s', known_devices)
 
